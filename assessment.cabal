@@ -1,5 +1,5 @@
 name:          assessment
-version:       0.0.0
+version:       0.0.1
 -- synopsis:            
 -- description:         
 license:             BSD3
@@ -8,15 +8,58 @@ author:              Brad Safnuk
 maintainer:          brad.safnuk@cmich.edu
 -- copyright:           
 category:            Web
-cabal-version: >= 1.8
+cabal-version: >= 1.10
 build-type:    Simple
 
+library
+  exposed-modules:     System.Hworker
+                     , Assessment.Types
+  other-modules:       Data.Aeson.Helpers
+  ghc-options:    -Wall
+  build-depends:       base >= 4.7 && < 5
+                     , aeson
+                     , hedis >= 0.6.5
+                     , text
+                     , bytestring
+                     , time >= 1.5
+                     , attoparsec
+                     , uuid >= 1.2.6
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
 executable          assessment
-    hs-source-dirs: .
+    hs-source-dirs: src
+    other-modules:  System.Hworker
+                  , Assessment.Types
+                  , Data.Aeson.Helpers
     main-is:        Main.hs
     ghc-options:    -Wall -threaded -O2 -rtsopts -with-rtsopts=-N
     extensions:     OverloadedStrings
     build-depends:  base   >= 4      && < 5
-                  , scotty
                   , aeson
+                  , attoparsec
+                  , bytestring
+                  , hedis >= 0.6.5
                   , http-types
+                  , scotty
+                  , text
+                  , time >= 1.5
+                  , uuid >= 1.2.6
+                  , assessment
+
+executable         worker
+    hs-source-dirs: src
+    other-modules:  System.Hworker
+                  , Assessment.Types
+                  , Data.Aeson.Helpers
+    main-is:        Worker.hs
+    ghc-options:    -Wall -threaded -O2 -rtsopts -with-rtsopts=-N
+    build-depends:  base   >= 4      && < 5
+                  , aeson
+                  , attoparsec
+                  , bytestring
+                  , hedis >= 0.6.5
+                  , text
+                  , time >= 1.5
+                  , uuid >= 1.2.6
+                  , assessment
