@@ -4,28 +4,16 @@
 module Main where
 
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (newMVar)
-import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson (FromJSON, ToJSON, (.=), object)
--- import Data.Monoid ((<>))
-import GHC.Generics
+import Data.Aeson ((.=), object)
 import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
 import System.Hworker
 import Assessment.Types
 
-data Submission = Submission { username :: String, exercise_id :: Int, code :: String } deriving (Show, Generic)
-instance ToJSON Submission
-instance FromJSON Submission
-
-data Response = Response { job_id :: Int, status :: String, compiler_msg :: String, test_results :: [String] } deriving (Show, Generic)
-instance ToJSON Response
-instance FromJSON Response
-
 routes :: ScottyM ()
 routes = do
-  get "/test" $ join $ liftIO addToQueue
+  get "/test" testQueue
   get "/health" healthCheck
   get "/submissions/status" submissionsGetStatus
   get "/submissions/status" submissionsGetStatusFailure
@@ -33,26 +21,23 @@ routes = do
   post "/submissions" submissionsPostNew
   post "/submissions" submissionsPostNewFailure
   get "/submissions" submissionsGetNew
-  -- get "/hello/:name" helloPersonalized
-  -- get "/users" $ do
-  --   json allUsers
-  -- get "/users/:id" $ do
-  --   id <- param "id"
-  --   json (filter (matchesId id) allUsers)
-  -- post "/users" usersPost
-  -- post "/users" usersPostFailure
 
 
-addToQueue :: IO (ActionM())
-addToQueue = do
+testQueue :: ActionM ()
+testQueue = do
+  response <- liftIO $ addToQueue testSubmission
+  json response
+
+addToQueue :: Submission -> IO (JobID)
+addToQueue submission = do
   hw <- hworker
-  queue hw Print
-  return $ text "Submitted job to queue"
+  _ <- queue hw submission
+  return $ JobID 1
 
 submissionsGetStatus :: ActionM()
 submissionsGetStatus = do
   jobId <- ((param "id") :: ActionM Int) `rescue` (const next)
-  let response = Response jobId "DONE" "" ["PASS", "FAIL"]
+  let response = Response jobId Done "" [Pass, Fail]
   json response
 
 submissionsPostStatus :: ActionM()
@@ -61,10 +46,11 @@ submissionsPostStatus = invalidRequest Status.methodNotAllowed405
 submissionsGetStatusFailure :: ActionM()
 submissionsGetStatusFailure = invalidRequest Status.badRequest400
 
-submissionsPostNew :: ActionM()
+submissionsPostNew :: ActionM ()
 submissionsPostNew = do
   submission <- (jsonData :: ActionM Submission) `rescue` (const next)
-  json submission 
+  response <- liftIO $ addToQueue submission
+  json response 
 
 submissionsGetNew :: ActionM()
 submissionsGetNew = invalidRequest Status.methodNotAllowed405
@@ -85,7 +71,7 @@ healthCheck = do
 main :: IO ()
 main = do
     hw <- hworker
-    forkIO (monitor hw)
+    _ <- forkIO (monitor hw)
     putStrLn "Starting server..."
     scotty 3000 $ do
         routes
