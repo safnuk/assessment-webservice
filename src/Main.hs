@@ -6,6 +6,7 @@ module Main where
 import Control.Concurrent (forkIO)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson ((.=), object)
+import qualified Database.Redis as R
 import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
 import System.Hworker
@@ -13,57 +14,62 @@ import Assessment.Types
 
 routes :: ScottyM ()
 routes = do
-  get "/test" testQueue
   get "/health" healthCheck
   get "/submissions/status" submissionsGetStatus
+  -- any errors in submissionsGetStatus drops down to submissionsGetStatusFailure
   get "/submissions/status" submissionsGetStatusFailure
-  post "/submissions/status" submissionsPostStatus
+  post "/submissions/status" requestNotAllowed
   post "/submissions" submissionsPostNew
   post "/submissions" submissionsPostNewFailure
-  get "/submissions" submissionsGetNew
+  get "/submissions" requestNotAllowed
 
 
-testQueue :: ActionM ()
-testQueue = do
-  response <- liftIO $ addToQueue testSubmission
-  json response
-
-addToQueue :: Submission -> IO (JobID)
+addToQueue :: Submission -> IO (JobID Integer)
 addToQueue submission = do
+  conn <- R.checkedConnect R.defaultConnectInfo
   hw <- hworker
-  _ <- queue hw submission
-  return $ JobID 1
+  r <- R.runRedis conn $ do
+    R.incr "job_id"
+  case r of
+    Left err -> undefined
+    Right j -> do
+        _ <- queue hw submission
+        return $ JobID j
 
-submissionsGetStatus :: ActionM()
+submissionsGetStatus :: ActionM ()
 submissionsGetStatus = do
   jobId <- ((param "id") :: ActionM Int) `rescue` (const next)
   let response = Response jobId Done "" [Pass, Fail]
   json response
 
-submissionsPostStatus :: ActionM()
-submissionsPostStatus = invalidRequest Status.methodNotAllowed405
-
-submissionsGetStatusFailure :: ActionM()
+submissionsGetStatusFailure :: ActionM ()
 submissionsGetStatusFailure = invalidRequest Status.badRequest400
 
 submissionsPostNew :: ActionM ()
 submissionsPostNew = do
   submission <- (jsonData :: ActionM Submission) `rescue` (const next)
-  response <- liftIO $ addToQueue submission
-  json response 
+  tooMany <- liftIO $ tooManyRequests submission
+  if tooMany
+    then invalidRequest Status.tooManyRequests429
+    else do response <- liftIO $ addToQueue submission
+            json response 
 
-submissionsGetNew :: ActionM()
-submissionsGetNew = invalidRequest Status.methodNotAllowed405
+tooManyRequests :: Submission -> IO (Bool)
+tooManyRequests _ = return False
 
-submissionsPostNewFailure :: ActionM()
+requestNotAllowed :: ActionM ()
+requestNotAllowed = invalidRequest Status.methodNotAllowed405
+
+submissionsPostNewFailure :: ActionM ()
 submissionsPostNewFailure = invalidRequest Status.badRequest400
 
-invalidRequest :: Status.Status -> ActionM()
+invalidRequest :: Status.Status -> ActionM ()
 invalidRequest x = do
   json $ object [ "error" .= ("Invalid request" :: String) ]
   WS.status x
 
-healthCheck :: ActionM()
+-- in case we use kubernetes
+healthCheck :: ActionM ()
 healthCheck = do
   text "UP"
 

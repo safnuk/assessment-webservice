@@ -40,11 +40,10 @@ instance Job State Submission where
        putStrLn $ show submission
        return Success
 
-data SubmissionResponse = Either TooManySubmissions JobID
-
+data SubmissionResponse = Either TooManySubmissions (JobID Int)
 data TooManySubmissions = TooManySubmissions deriving (Show)
-data JobID = JobID Int deriving (Show)
-instance ToJSON JobID where
+data JobID a = JobID a deriving (Show)
+instance (ToJSON a) => ToJSON (JobID a) where
   toJSON (JobID x) = object [ "job_id" .= x ]
 
 data Status = Processing | Done deriving (Show)
