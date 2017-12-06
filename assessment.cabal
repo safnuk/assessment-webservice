@@ -38,6 +38,7 @@ executable          assessment
     build-depends:  base   >= 4      && < 5
                   , aeson
                   , attoparsec
+                  , binary
                   , bytestring
                   , hedis >= 0.6.5
                   , http-types

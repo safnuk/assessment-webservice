@@ -4,18 +4,20 @@
 
 module Assessment.Types where 
 
-import Control.Concurrent.MVar (MVar, newMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (MVar)
+import Control.Concurrent.MVar (newMVar, putMVar, takeMVar)
 import Data.Aeson (
     FromJSON
   , object
   , parseJSON
-  , Value (String)
-  , ToJSON
   , toJSON
+  , ToJSON
+  , Value (String)
+  , (.:)
   , (.=))
+import qualified Data.Aeson as A
 import GHC.Generics (Generic)
 import System.Hworker
-
 
 testSubmission :: Submission
 testSubmission = Submission {
@@ -24,27 +26,31 @@ testSubmission = Submission {
   , code = "print;"
 }
 
+data SubmissionResponse = Either TooManySubmissions JobID 
+data TooManySubmissions = TooManySubmissions deriving (Show)
+
+data JobID = JobID Integer deriving (Show)
+instance ToJSON JobID where
+  toJSON (JobID x) = object [ "job_id" .= x ]
+instance FromJSON JobID where
+  parseJSON (A.Object o) = JobID <$> o .: "job_id"
+  parseJSON _ = fail "Failed to parse JobID!"
+
+instance Job State JobID where
+  job (State mvar) j =
+    do v <- takeMVar mvar
+       putMVar mvar (v + 1)
+       submission <- getSubmission j
+       processSubmission submission
+       return Success
+
 data Submission = Submission {
     username :: String
-  , exercise_id :: Int
+  , exercise_id :: Integer
   , code :: String
 } deriving (Show, Generic)
 instance ToJSON Submission
 instance FromJSON Submission
-
--- allows Submission datatype to be added to worker queue
-instance Job State Submission where
-  job (State mvar) submission =
-    do v <- takeMVar mvar
-       putMVar mvar (v + 1)
-       putStrLn $ show submission
-       return Success
-
-data SubmissionResponse = Either TooManySubmissions (JobID Int)
-data TooManySubmissions = TooManySubmissions deriving (Show)
-data JobID a = JobID a deriving (Show)
-instance (ToJSON a) => ToJSON (JobID a) where
-  toJSON (JobID x) = object [ "job_id" .= x ]
 
 data Status = Processing | Done deriving (Show)
 
@@ -71,7 +77,7 @@ instance FromJSON TestResult where
 
 
 data Response = Response {
-    job_id :: Int,
+    job_id :: Integer,
     status :: Status,
     compiler_msg :: String,
     test_results :: [TestResult]
@@ -80,25 +86,23 @@ data Response = Response {
 instance ToJSON Response
 instance FromJSON Response
 
-
-data PrintJob = Print deriving (Generic, Show)
 data State = State (MVar Int)
-instance ToJSON PrintJob
-instance FromJSON PrintJob
 
--- instance Job State PrintJob where
---   job (State mvar) Print =
---     do v <- takeMVar mvar
---        putMVar mvar (v + 1)
---        putStrLn $ "A(" ++ show v ++ ")"
---        return Success
+getSubmission:: JobID -> IO (Submission)
+getSubmission (JobID j) = do
+  return testSubmission
 
--- hworker :: IO (Hworker State PrintJob)
--- hworker = do
---   mvar <- newMVar 3
---   create "printer" (State mvar)
+putSubmission :: JobID -> Submission -> IO () 
+putSubmission = undefined
 
-hworker :: IO (Hworker State Submission)
+nextJobID :: IO (JobID)
+nextJobID = undefined
+
+hworker :: IO (Hworker State JobID)
 hworker = do
   mvar <- newMVar 3
   create "submissions" (State mvar)
+
+processSubmission :: Submission -> IO ()
+processSubmission submission = do
+  putStrLn $ show submission

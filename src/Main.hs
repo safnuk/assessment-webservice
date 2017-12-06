@@ -1,11 +1,13 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
 import Control.Concurrent (forkIO)
 import Control.Monad.IO.Class (liftIO)
-import Data.Aeson ((.=), object)
+import Data.Aeson ((.=), encode, object)
+import qualified Data.Binary as DB 
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.Text.Lazy.Encoding as TE
 import qualified Database.Redis as R
 import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
@@ -16,7 +18,8 @@ routes :: ScottyM ()
 routes = do
   get "/health" healthCheck
   get "/submissions/status" submissionsGetStatus
-  -- any errors in submissionsGetStatus drops down to submissionsGetStatusFailure
+  -- any errors in submissionsGetStatus drops down to
+  -- submissionsGetStatusFailure
   get "/submissions/status" submissionsGetStatusFailure
   post "/submissions/status" requestNotAllowed
   post "/submissions" submissionsPostNew
@@ -24,23 +27,33 @@ routes = do
   get "/submissions" requestNotAllowed
 
 
-addToQueue :: Submission -> IO (JobID Integer)
+addToQueue :: Submission -> IO (JobID)
 addToQueue submission = do
   conn <- R.checkedConnect R.defaultConnectInfo
   hw <- hworker
-  r <- R.runRedis conn $ do
+  r <- liftIO $ R.runRedis conn $ do
     R.incr "job_id"
   case r of
     Left err -> undefined
     Right j -> do
-        _ <- queue hw submission
+        _ <- liftIO $ R.runRedis conn $ do
+          R.set (LB.toStrict $ DB.encode j) (LB.toStrict $ encode submission)
+        _ <- queue hw (JobID j)
         return $ JobID j
 
 submissionsGetStatus :: ActionM ()
 submissionsGetStatus = do
-  jobId <- ((param "id") :: ActionM Int) `rescue` (const next)
-  let response = Response jobId Done "" [Pass, Fail]
-  json response
+  jobId <- ((param "id") :: ActionM Integer) `rescue` (const next)
+  conn <- liftIO $ R.checkedConnect R.defaultConnectInfo
+  r <- liftIO $ R.runRedis conn $ do
+    R.get (LB.toStrict $ DB.encode jobId)
+  case r of
+    Left err -> undefined
+    Right Nothing -> undefined
+    Right (Just submission) -> do
+      text $ TE.decodeUtf8 $ LB.fromStrict submission
+  -- let response = Response jobId Done "" [Pass, Fail]
+  -- json response
 
 submissionsGetStatusFailure :: ActionM ()
 submissionsGetStatusFailure = invalidRequest Status.badRequest400
