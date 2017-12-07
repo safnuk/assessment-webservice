@@ -18,6 +18,7 @@ library
   ghc-options:    -Wall
   build-depends:       base >= 4.7 && < 5
                      , aeson
+                     , binary
                      , hedis >= 0.6.5
                      , text
                      , bytestring
@@ -30,6 +31,7 @@ library
 executable          assessment
     hs-source-dirs: src
     other-modules:  System.Hworker
+                  , Assessment.Data
                   , Assessment.Types
                   , Data.Aeson.Helpers
     main-is:        Main.hs
@@ -58,9 +60,32 @@ executable         worker
     build-depends:  base   >= 4      && < 5
                   , aeson
                   , attoparsec
+                  , binary
                   , bytestring
                   , hedis >= 0.6.5
                   , text
                   , time >= 1.5
                   , uuid >= 1.2.6
                   , assessment
+
+executable        dummy
+    hs-source-dirs: src
+    other-modules:  Assessment.Log
+                  , Assessment.Types
+                  , Data.Aeson.Helpers
+                  , System.Hworker
+    main-is:        TestServer.hs
+    ghc-options:    -Wall -threaded -O2 -rtsopts -with-rtsopts=-N
+    build-depends:  base   >= 4      && < 5
+                  , aeson
+                  , attoparsec
+                  , binary
+                  , bytestring
+                  , hedis >= 0.6.5
+                  , http-types
+                  , scotty
+                  , text
+                  , time >= 1.5
+                  , uuid >= 1.2.6
+                  , assessment
+

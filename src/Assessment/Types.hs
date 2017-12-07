@@ -6,8 +6,10 @@ module Assessment.Types where
 
 import Control.Concurrent.MVar (MVar)
 import Control.Concurrent.MVar (newMVar, putMVar, takeMVar)
+import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (
     FromJSON
+  , decode
   , object
   , parseJSON
   , toJSON
@@ -16,6 +18,9 @@ import Data.Aeson (
   , (.:)
   , (.=))
 import qualified Data.Aeson as A
+import qualified Data.Binary as DB 
+import qualified Data.ByteString.Lazy as LB
+import qualified Database.Redis as R
 import GHC.Generics (Generic)
 import System.Hworker
 
@@ -24,6 +29,20 @@ testSubmission = Submission {
     username = "user"
   , exercise_id = 5
   , code = "print;"
+}
+
+testResponse :: Response
+testResponse = Response {
+    job_id = 2
+  , status = Done
+  , compiler_msg = ""
+  , test_results = [Pass, Fail]
+}
+
+testAssignment :: Assignment
+testAssignment = Assignment {
+    inputs = ["hello", "world"]
+  , outputs = ["hello, hello", "hello, world"]
 }
 
 data SubmissionResponse = Either TooManySubmissions JobID 
@@ -40,9 +59,20 @@ instance Job State JobID where
   job (State mvar) j =
     do v <- takeMVar mvar
        putMVar mvar (v + 1)
-       submission <- getSubmission j
-       processSubmission submission
+       qe <- getQueueEntry j
+       processQueueEntry qe
        return Success
+
+data QueueEntry = QueueEntry Submission Assignment deriving (Show, Generic)
+instance ToJSON QueueEntry
+instance FromJSON QueueEntry
+
+data Assignment = Assignment {
+    inputs :: [String]
+  , outputs :: [String]
+} deriving (Show, Generic)
+instance ToJSON Assignment
+instance FromJSON Assignment
 
 data Submission = Submission {
     username :: String
@@ -88,21 +118,25 @@ instance FromJSON Response
 
 data State = State (MVar Int)
 
-getSubmission:: JobID -> IO (Submission)
-getSubmission (JobID j) = do
-  return testSubmission
+getQueueEntry :: JobID -> IO (QueueEntry)
+getQueueEntry (JobID j) = do
+  conn <- liftIO $ R.checkedConnect R.defaultConnectInfo
+  r <- liftIO $ R.runRedis conn $ do
+    R.get (LB.toStrict $ DB.encode j)
+  case r of
+    Left _ -> undefined
+    Right Nothing -> undefined
+    Right (Just s) -> do
+      let d = (decode $ LB.fromStrict s) :: (Maybe QueueEntry)
+      case d of
+        Nothing -> undefined
+        Just qe -> return qe
 
-putSubmission :: JobID -> Submission -> IO () 
-putSubmission = undefined
-
-nextJobID :: IO (JobID)
-nextJobID = undefined
+processQueueEntry :: QueueEntry -> IO ()
+processQueueEntry qe = do
+  putStrLn $ show qe
 
 hworker :: IO (Hworker State JobID)
 hworker = do
-  mvar <- newMVar 3
+  mvar <- newMVar 0
   create "submissions" (State mvar)
-
-processSubmission :: Submission -> IO ()
-processSubmission submission = do
-  putStrLn $ show submission
