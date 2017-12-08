@@ -13,7 +13,7 @@ tests = [
 
 routes :: ScottyM ()
 routes = do
-  get "/assignments/tests" getTests
+  get "/assignment/tests" getTests
   post "/log/assessment" postLog
   post "/log/assessment" badPostLog
   

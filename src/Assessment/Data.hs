@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Assessment.Data where
 
 import Assessment.Types

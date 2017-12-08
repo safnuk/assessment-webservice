@@ -13,17 +13,22 @@ build-type:    Simple
 
 library
   exposed-modules:     System.Hworker
+                     , Assessment.Config
+                     , Assessment.Data
+                     , Assessment.External
+                     , Assessment.Log
                      , Assessment.Types
   other-modules:       Data.Aeson.Helpers
   ghc-options:    -Wall
   build-depends:       base >= 4.7 && < 5
                      , aeson
-                     , binary
-                     , hedis >= 0.6.5
-                     , text
-                     , bytestring
-                     , time >= 1.5
                      , attoparsec
+                     , binary
+                     , bytestring
+                     , hedis >= 0.6.5
+                     , req
+                     , text
+                     , time >= 1.5
                      , uuid >= 1.2.6
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -32,6 +37,7 @@ executable          assessment
     hs-source-dirs: src
     other-modules:  System.Hworker
                   , Assessment.Data
+                  , Assessment.External
                   , Assessment.Types
                   , Data.Aeson.Helpers
     main-is:        Main.hs
