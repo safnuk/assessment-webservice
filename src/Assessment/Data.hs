@@ -2,8 +2,13 @@
 
 module Assessment.Data where
 
-import Assessment.Types
+import Assessment.Config as Config
+import Assessment.Types as Types
+import Control.Applicative
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.Trans.Maybe
 import Data.Aeson (encode)
 import qualified Data.Binary as DB 
 import qualified Data.ByteString.Char8 as BS
@@ -32,7 +37,7 @@ putSubmission :: JobID -> Submission -> IO ()
 putSubmission (JobID j) submission = do
   assignment <- getAssignment $ exercise_id submission
   let qe = QueueEntry submission assignment
-  noteRequestMade submission 60
+  noteRequestMade submission Config.requestCounterTimeout
   conn <- R.checkedConnect R.defaultConnectInfo
   _ <- R.runRedis conn $ do
        R.set (LB.toStrict $ DB.encode j) (LB.toStrict $ encode qe)
@@ -41,11 +46,44 @@ putSubmission (JobID j) submission = do
 getAssignment :: Integer -> IO (Assignment)
 getAssignment _ = pure testAssignment
 
-getStatusResponse :: JobID -> IO (Response)
-getStatusResponse _ = pure testResponse
+getStatusResponse :: JobID -> MaybeT IO (Response)
+getStatusResponse j = getResult j <|> buildProcessingResponse j
+  -- resp <- getResult j
+  -- case resp of
+  --   Just sr -> return sr
+  --   Nothing -> do
+  --     qe <- getQueueEntry j
+  --       case qe of
+  --         Nothing -> undefined
+  --         Just q -> 
+  --           return Response {
+  --                     job_id = toInteger j
+  --                   , status = Processing
+  --                   , compiler_msg = ""
+  --                   , test_results = []}
 
-tooManyRequests :: Submission -> Integer -> IO (Bool)
-tooManyRequests s maxAllowed = do
+getResult :: JobID -> MaybeT IO Response
+getResult _ = mzero
+
+buildProcessingResponse :: JobID -> MaybeT IO Response
+buildProcessingResponse j = do
+  exists <- liftIO $ queueEntryExists j
+  if exists
+     then return Response {
+            job_id = jobToInteger j
+            , status = Processing
+            , compiler_msg = ""
+            , test_results = []}
+     else mzero
+
+queueEntryExists :: JobID -> IO (Bool)
+queueEntryExists _ = pure True
+
+tooManyRequests :: Submission -> IO (Bool)
+tooManyRequests = moreThanRequests Config.maxRequestFrequency
+
+moreThanRequests :: Integer -> Submission -> IO (Bool)
+moreThanRequests maxAllowed s = do
   index <- firstAvailableRequestIndex (username s)
   case index of
     Nothing -> return True

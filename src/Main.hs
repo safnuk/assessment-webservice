@@ -4,6 +4,9 @@ module Main where
 
 import Control.Concurrent (forkIO)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.Trans.Maybe
 import Data.Aeson ((.=), object)
 import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
@@ -33,8 +36,11 @@ addToQueue submission = do
 submissionsGetStatus :: ActionM ()
 submissionsGetStatus = do
   j <- ((param "id") :: ActionM Integer) `rescue` (const next)
-  response <- liftIO $ getStatusResponse (JobID j)
-  json response
+  let x = runMaybeT $ getStatusResponse (JobID j)
+  mResponse <- liftIO x
+  case mResponse of
+    Nothing -> invalidRequest Status.notFound404
+    Just response -> json response
 
 submissionsGetStatusFailure :: ActionM ()
 submissionsGetStatusFailure = invalidRequest Status.badRequest400
@@ -42,7 +48,7 @@ submissionsGetStatusFailure = invalidRequest Status.badRequest400
 submissionsPostNew :: ActionM ()
 submissionsPostNew = do
   submission <- (jsonData :: ActionM Submission) `rescue` (const next)
-  tooMany <- liftIO $ tooManyRequests submission 2
+  tooMany <- liftIO $ tooManyRequests submission
   if tooMany
     then invalidRequest Status.tooManyRequests429
     else do response <- liftIO $ addToQueue submission

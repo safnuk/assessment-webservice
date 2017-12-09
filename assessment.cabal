@@ -26,9 +26,11 @@ library
                      , binary
                      , bytestring
                      , hedis >= 0.6.5
+                     , mtl
                      , req
                      , text
                      , time >= 1.5
+                     , transformers
                      , uuid >= 1.2.6
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -50,9 +52,12 @@ executable          assessment
                   , bytestring
                   , hedis >= 0.6.5
                   , http-types
+                  , mtl
+                  , req
                   , scotty
                   , text
                   , time >= 1.5
+                  , transformers
                   , uuid >= 1.2.6
                   , assessment
 
@@ -69,8 +74,11 @@ executable         worker
                   , binary
                   , bytestring
                   , hedis >= 0.6.5
+                  , mtl
+                  , req
                   , text
                   , time >= 1.5
+                  , transformers
                   , uuid >= 1.2.6
                   , assessment
 
@@ -89,9 +97,11 @@ executable        dummy
                   , bytestring
                   , hedis >= 0.6.5
                   , http-types
+                  , mtl
                   , scotty
                   , text
                   , time >= 1.5
+                  , transformers
                   , uuid >= 1.2.6
                   , assessment
 

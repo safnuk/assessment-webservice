@@ -7,6 +7,9 @@ module Assessment.Types where
 import Control.Concurrent.MVar (MVar)
 import Control.Concurrent.MVar (newMVar, putMVar, takeMVar)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.Trans.Maybe
 import Data.Aeson (
     FromJSON
   , decode
@@ -55,13 +58,19 @@ instance FromJSON JobID where
   parseJSON (A.Object o) = JobID <$> o .: "job_id"
   parseJSON _ = fail "Failed to parse JobID!"
 
+jobToInteger :: JobID -> Integer
+jobToInteger (JobID j) = j
+
 instance Job State JobID where
   job (State mvar) j =
     do v <- takeMVar mvar
        putMVar mvar (v + 1)
-       qe <- getQueueEntry j
-       processQueueEntry qe
-       return Success
+       qe <- runMaybeT $ getQueueEntry j
+       case qe of
+         Nothing -> return $ Failure "Job not found"
+         Just q -> do
+           processQueueEntry q
+           return Success
 
 data QueueEntry = QueueEntry Submission Assignment deriving (Show, Generic)
 instance ToJSON QueueEntry
@@ -118,18 +127,20 @@ instance FromJSON Response
 
 data State = State (MVar Int)
 
-getQueueEntry :: JobID -> IO (QueueEntry)
+getQueueEntry :: JobID -> MaybeT IO QueueEntry
 getQueueEntry (JobID j) = do
   conn <- liftIO $ R.checkedConnect R.defaultConnectInfo
   r <- liftIO $ R.runRedis conn $ do
     R.get (LB.toStrict $ DB.encode j)
   case r of
-    Left _ -> undefined
-    Right Nothing -> undefined
+    Left _ -> mzero
+    -- Right s -> MaybeT $ return $ (decode <*> LB.fromStrict <$> s)
+    -- :: (Maybe QueueEntry)
+    Right Nothing -> mzero
     Right (Just s) -> do
       let d = (decode $ LB.fromStrict s) :: (Maybe QueueEntry)
       case d of
-        Nothing -> undefined
+        Nothing -> mzero
         Just qe -> return qe
 
 processQueueEntry :: QueueEntry -> IO ()
