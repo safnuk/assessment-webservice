@@ -7,6 +7,7 @@ module Main where
 import           Control.Concurrent      (forkIO, threadDelay)
 import           Control.Monad           (forever)
 import           System.Hworker
+import           Assessment.Job
 import           Assessment.Types
 
 

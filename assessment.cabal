@@ -16,6 +16,7 @@ library
                      , Assessment.Config
                      , Assessment.Data
                      , Assessment.External
+                     , Assessment.Job
                      , Assessment.Log
                      , Assessment.Types
   other-modules:       Data.Aeson.Helpers
@@ -38,8 +39,11 @@ library
 executable          assessment
     hs-source-dirs: src
     other-modules:  System.Hworker
+                  , Assessment.Config
                   , Assessment.Data
                   , Assessment.External
+                  , Assessment.Job
+                  , Assessment.Log
                   , Assessment.Types
                   , Data.Aeson.Helpers
     main-is:        Main.hs
@@ -64,6 +68,10 @@ executable          assessment
 executable         worker
     hs-source-dirs: src
     other-modules:  System.Hworker
+                  , Assessment.Config
+                  , Assessment.External
+                  , Assessment.Job
+                  , Assessment.Log
                   , Assessment.Types
                   , Data.Aeson.Helpers
     main-is:        Worker.hs

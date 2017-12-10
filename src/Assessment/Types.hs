@@ -4,28 +4,13 @@
 
 module Assessment.Types where 
 
-import Control.Concurrent.MVar (MVar)
-import Control.Concurrent.MVar (newMVar, putMVar, takeMVar)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad
-import Control.Monad.Trans
-import Control.Monad.Trans.Maybe
 import Data.Aeson (
     FromJSON
-  , decode
-  , object
   , parseJSON
   , toJSON
   , ToJSON
-  , Value (String)
-  , (.:)
-  , (.=))
-import qualified Data.Aeson as A
-import qualified Data.Binary as DB 
-import qualified Data.ByteString.Lazy as LB
-import qualified Database.Redis as R
+  , Value (String))
 import GHC.Generics (Generic)
-import System.Hworker
 
 testSubmission :: Submission
 testSubmission = Submission {
@@ -47,30 +32,6 @@ testAssignment = Assignment {
     inputs = ["hello", "world"]
   , outputs = ["hello, hello", "hello, world"]
 }
-
-data SubmissionResponse = Either TooManySubmissions JobID 
-data TooManySubmissions = TooManySubmissions deriving (Show)
-
-data JobID = JobID Integer deriving (Show)
-instance ToJSON JobID where
-  toJSON (JobID x) = object [ "job_id" .= x ]
-instance FromJSON JobID where
-  parseJSON (A.Object o) = JobID <$> o .: "job_id"
-  parseJSON _ = fail "Failed to parse JobID!"
-
-jobToInteger :: JobID -> Integer
-jobToInteger (JobID j) = j
-
-instance Job State JobID where
-  job (State mvar) j =
-    do v <- takeMVar mvar
-       putMVar mvar (v + 1)
-       qe <- runMaybeT $ getQueueEntry j
-       case qe of
-         Nothing -> return $ Failure "Job not found"
-         Just q -> do
-           processQueueEntry q
-           return Success
 
 data QueueEntry = QueueEntry Submission Assignment deriving (Show, Generic)
 instance ToJSON QueueEntry
@@ -124,30 +85,3 @@ data Response = Response {
 
 instance ToJSON Response
 instance FromJSON Response
-
-data State = State (MVar Int)
-
-getQueueEntry :: JobID -> MaybeT IO QueueEntry
-getQueueEntry (JobID j) = do
-  conn <- liftIO $ R.checkedConnect R.defaultConnectInfo
-  r <- liftIO $ R.runRedis conn $ do
-    R.get (LB.toStrict $ DB.encode j)
-  case r of
-    Left _ -> mzero
-    -- Right s -> MaybeT $ return $ (decode <*> LB.fromStrict <$> s)
-    -- :: (Maybe QueueEntry)
-    Right Nothing -> mzero
-    Right (Just s) -> do
-      let d = (decode $ LB.fromStrict s) :: (Maybe QueueEntry)
-      case d of
-        Nothing -> mzero
-        Just qe -> return qe
-
-processQueueEntry :: QueueEntry -> IO ()
-processQueueEntry qe = do
-  putStrLn $ show qe
-
-hworker :: IO (Hworker State JobID)
-hworker = do
-  mvar <- newMVar 0
-  create "submissions" (State mvar)

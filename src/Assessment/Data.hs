@@ -3,13 +3,15 @@
 module Assessment.Data where
 
 import Assessment.Config as Config
+import Assessment.External
+import Assessment.Job
 import Assessment.Types as Types
 import Control.Applicative
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Data.Aeson (encode)
+import Data.Aeson (decode, encode)
 import qualified Data.Binary as DB 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LB
@@ -17,15 +19,15 @@ import Data.List (findIndex)
 import qualified Database.Redis as R
 import System.Hworker
 
-enqueue :: JobID -> IO ()
+enqueue :: JobID -> MaybeT IO ()
 enqueue j = do
-  hw <- hworker
-  _ <- queue hw j
+  hw <- lift hworker
+  _ <- lift $ queue hw j
   return ()
 
-nextJobID :: IO (JobID)
+nextJobID :: MaybeT IO (JobID)
 nextJobID = do
-  conn <- R.checkedConnect R.defaultConnectInfo
+  conn <- lift $ R.checkedConnect R.defaultConnectInfo
   r <- liftIO $ R.runRedis conn $ do
     R.incr "job_id"
   case r of
@@ -33,38 +35,28 @@ nextJobID = do
     Right j -> do
       return $ JobID j
 
-putSubmission :: JobID -> Submission -> IO () 
+putSubmission :: JobID -> Submission -> MaybeT IO () 
 putSubmission (JobID j) submission = do
-  assignment <- getAssignment $ exercise_id submission
+  assignment <- getAssignmentTests $ exercise_id submission
   let qe = QueueEntry submission assignment
-  noteRequestMade submission Config.requestCounterTimeout
-  conn <- R.checkedConnect R.defaultConnectInfo
-  _ <- R.runRedis conn $ do
+  lift $ noteRequestMade submission Config.requestCounterTimeout
+  conn <- lift $ R.checkedConnect R.defaultConnectInfo
+  _ <- lift $ R.runRedis conn $ do
        R.set (LB.toStrict $ DB.encode j) (LB.toStrict $ encode qe)
   return ()
 
-getAssignment :: Integer -> IO (Assignment)
-getAssignment _ = pure testAssignment
-
 getStatusResponse :: JobID -> MaybeT IO (Response)
-getStatusResponse j = getResult j <|> buildProcessingResponse j
-  -- resp <- getResult j
-  -- case resp of
-  --   Just sr -> return sr
-  --   Nothing -> do
-  --     qe <- getQueueEntry j
-  --       case qe of
-  --         Nothing -> undefined
-  --         Just q -> 
-  --           return Response {
-  --                     job_id = toInteger j
-  --                   , status = Processing
-  --                   , compiler_msg = ""
-  --                   , test_results = []}
+getStatusResponse j = getProcessedResult j <|> buildProcessingResponse j
 
-getResult :: JobID -> MaybeT IO Response
-getResult _ = mzero
-
+getProcessedResult :: JobID -> MaybeT IO Response
+getProcessedResult j = do
+  conn <- lift $ R.checkedConnect R.defaultConnectInfo
+  result <- liftIO $ R.runRedis conn $ 
+    R.hget "DONE" (jobToByteString j)
+  case result of
+    Left _ -> mzero
+    Right x -> MaybeT $ ((pure $ (LB.fromStrict <$> x) >>=  decode) :: IO (Maybe Response))
+  
 buildProcessingResponse :: JobID -> MaybeT IO Response
 buildProcessingResponse j = do
   exists <- liftIO $ queueEntryExists j
@@ -77,7 +69,11 @@ buildProcessingResponse j = do
      else mzero
 
 queueEntryExists :: JobID -> IO (Bool)
-queueEntryExists _ = pure True
+queueEntryExists j = do
+  qe <- runMaybeT $ getQueueEntry j
+  case qe of
+    Nothing -> return False
+    _ -> return True
 
 tooManyRequests :: Submission -> IO (Bool)
 tooManyRequests = moreThanRequests Config.maxRequestFrequency
@@ -101,7 +97,6 @@ noteRequestMade s expiration = do
     _ <- R.set key "set"
     R.expire key expiration
   return ()
-
 
 keyExists :: String -> IO (Bool)
 keyExists s = do

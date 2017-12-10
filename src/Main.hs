@@ -12,6 +12,7 @@ import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
 import System.Hworker
 import Assessment.Data
+import Assessment.Job
 import Assessment.Types
 
 routes :: ScottyM ()
@@ -26,7 +27,7 @@ routes = do
   post "/submissions" submissionsPostNewFailure
   get "/submissions" requestNotAllowed
 
-addToQueue :: Submission -> IO (JobID)
+addToQueue :: Submission -> MaybeT IO (JobID)
 addToQueue submission = do
   j <- nextJobID
   putSubmission j submission
@@ -51,8 +52,11 @@ submissionsPostNew = do
   tooMany <- liftIO $ tooManyRequests submission
   if tooMany
     then invalidRequest Status.tooManyRequests429
-    else do response <- liftIO $ addToQueue submission
-            json response 
+    else do
+        response <- liftIO . runMaybeT $ addToQueue submission
+        case response of
+          Nothing -> invalidRequest Status.badRequest400
+          Just r -> json r
 
 requestNotAllowed :: ActionM ()
 requestNotAllowed = invalidRequest Status.methodNotAllowed405
@@ -65,11 +69,6 @@ invalidRequest x = do
   json $ object [ "error" .= ("Invalid request" :: String) ]
   WS.status x
 
--- in case we use kubernetes
-healthCheck :: ActionM ()
-healthCheck = do
-  text "UP"
-
 main :: IO ()
 main = do
     hw <- hworker
@@ -77,3 +76,8 @@ main = do
     putStrLn "Starting server..."
     scotty 3000 $ do
         routes
+
+-- in case we use kubernetes
+healthCheck :: ActionM ()
+healthCheck = do
+  text "UP"
