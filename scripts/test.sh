@@ -1,6 +1,8 @@
 #!/bin/sh
 
-docker run -p 3000:3000 -d --name assessment-test assessment
+docker run -p 3000:3000 -d --name assessment-test safnuk/assessment \
+    || (docker build -t safnuk/assessment . \
+    && docker run -p 3000:3000 -d --name assessment-test safnuk/assessment)
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
