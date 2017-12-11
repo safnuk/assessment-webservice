@@ -1,0 +1,12 @@
+public class Test {
+
+    public static void main(String[] args) {
+        // Prints "Hello, World" to the terminal window.
+        System.out.print("Hello, ");
+        System.out.println(args[0]);
+    }
+
+}
+
+
+

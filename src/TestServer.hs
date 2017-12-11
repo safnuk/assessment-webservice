@@ -4,6 +4,7 @@ module Main where
 
 import Assessment.Log (LogEntry)
 import Assessment.Types
+import Control.Monad.IO.Class (liftIO)
 import Network.HTTP.Types.Status as Status
 import Web.Scotty as WS
 
@@ -29,7 +30,7 @@ getTests = do
 postLog :: ActionM ()
 postLog = do
   log <- (jsonData :: ActionM LogEntry) `rescue` (const next)
-  print $ "Logged: " ++ (show log)
+  liftIO $ print $ "Logged: " ++ (show log)
   json log
 
 

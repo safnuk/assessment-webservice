@@ -8,7 +8,14 @@ RUN wget -qO- https://get.haskellstack.org/ | sh
 WORKDIR /app
 ADD . /app
 
-EXPOSE 6379
+ENV PATH=/root/.local/bin:${PATH}
+RUN cp Config.hs src/Assessment/Config.hs
+RUN stack setup && stack install
+
+# port the assessment server runs on in Docker container
 EXPOSE 3000
-EXPOSE 3001
-CMD ["/bin/bash", "start.sh"]
+
+ENTRYPOINT ["/bin/bash", "scripts/dockerstart.sh"]
+
+# by default, start one worker to process the work queue
+CMD ["1"]

@@ -28,6 +28,7 @@ import qualified Data.Binary as DB
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Lazy as LB
 import Data.Text (pack, strip, unpack)
+import qualified Data.Time as Time
 import qualified Data.UUID as UUID
 import Data.UUID.V4 (nextRandom)
 import qualified Database.Redis as R
@@ -92,13 +93,14 @@ processQueueEntry (JobID j) (Types.QueueEntry submission assignment) = do
     Types.compiler_msg = msg,
     Types.test_results = testResults
   }
+  current <- Time.getCurrentTime
   let logEntry = LogEntry {
       job_id = j
     , exercise_id = Types.exercise_id submission
     , code = codeSample
     , compiler_msg = msg
     , username = Types.username submission
-    , timestamp = "2017"
+    , timestamp =(show current)
   }
   putResponse (JobID j) response
   postLog logEntry
