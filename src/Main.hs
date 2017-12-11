@@ -1,3 +1,4 @@
+-- Main web server used for interacting with the service
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where

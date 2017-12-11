@@ -1,3 +1,4 @@
+-- Processes jobs from the job queue
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
@@ -56,6 +57,7 @@ jobToInteger (JobID j) = j
 jobToByteString :: JobID -> ByteString
 jobToByteString = LB.toStrict . DB.encode . jobToInteger
 
+-- Get details of submitted job from the database
 getQueueEntry :: JobID -> MaybeT IO Types.QueueEntry
 getQueueEntry (JobID j) = do
   conn <- liftIO $ R.checkedConnect R.defaultConnectInfo
@@ -72,9 +74,11 @@ getQueueEntry (JobID j) = do
         Nothing -> mzero
         Just qe -> return qe
 
+-- Process the given job (compile and run against test cases)
 processQueueEntry :: JobID -> Types.QueueEntry -> IO ()
 processQueueEntry (JobID j) (Types.QueueEntry submission assignment) = do
   let codeSample = Types.code submission
+  -- Put each job code in its own unique build directory
   uuid <- nextRandom
   let buildDir = "/tmp/assessment/" ++ (UUID.toString uuid)
   mktree $ fromString buildDir
@@ -84,6 +88,7 @@ processQueueEntry (JobID j) (Types.QueueEntry submission assignment) = do
   msg <- compileCode javaFile
   results <- if msg == ""
     then sequence $ map (runProgram Config.javaClass) $ Types.inputs assignment
+    -- Compilation errors lead to automatic failing of tests
     else pure $ replicate (length $ Types.inputs assignment) Nothing
   let pairs = zip results $ Types.outputs assignment
   let testResults = map validateTest pairs

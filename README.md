@@ -29,6 +29,8 @@ The service is designed around the principles of fault tolerance and allowing in
 
 The service is written in Haskell, using the [Scotty](https://hackage.haskell.org/package/scotty) framework for the web server, the [Hworker](https://hackage.haskell.org/package/hworker) library to implement the work queue, and the [Turtle](https://hackage.haskell.org/package/turtle) library for interfacing with java for compiling and running the test cases. It also makes use of the [Req](https://hackage.haskell.org/package/req) library for sending http requests to the external logging and assignment services.
 
+Note that a recent change in the Redis API makes the current version of the HWorker library not work properly. The project contains a forked version of the library with the error fixed.
+
 ## Installation
 
 To install the service, first clone the repository

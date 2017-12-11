@@ -1,3 +1,4 @@
+-- Server mocking the logging and assignment services for testing purposes
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where

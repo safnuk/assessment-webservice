@@ -1,3 +1,4 @@
+-- Code for making requests to external services
 {-# LANGUAGE OverloadedStrings #-}
 
 module Assessment.External where

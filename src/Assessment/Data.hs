@@ -1,3 +1,4 @@
+-- Code for interacting with the redis datastore
 {-# LANGUAGE OverloadedStrings #-}
 
 module Assessment.Data where
@@ -19,12 +20,15 @@ import Data.List (findIndex)
 import qualified Database.Redis as R
 import System.Hworker
 
+-- Add a job to the work queue
 enqueue :: JobID -> MaybeT IO ()
 enqueue j = do
   hw <- lift hworker
   _ <- lift $ queue hw j
   return ()
 
+-- Get the id for the next job to be put on the enqueue
+-- Ensures that each submission is assigned a unique job_id
 nextJobID :: MaybeT IO (JobID)
 nextJobID = do
   conn <- lift $ R.checkedConnect R.defaultConnectInfo
@@ -35,6 +39,7 @@ nextJobID = do
     Right j -> do
       return $ JobID j
 
+-- Stores the submission details in the database, accessed via the job_id key
 putSubmission :: JobID -> Submission -> MaybeT IO () 
 putSubmission (JobID j) submission = do
   assignment <- getAssignmentTests $ exercise_id submission
@@ -45,9 +50,13 @@ putSubmission (JobID j) submission = do
        R.set (LB.toStrict $ DB.encode j) (LB.toStrict $ encode qe)
   return ()
 
+-- Get the final processed job (if complete) or a response indicating that the job 
+-- is still being processed
 getStatusResponse :: JobID -> MaybeT IO (Response)
 getStatusResponse j = getProcessedResult j <|> buildProcessingResponse j
 
+-- Check to see if the job is finished processing,
+-- returns the result if found
 getProcessedResult :: JobID -> MaybeT IO Response
 getProcessedResult j = do
   conn <- lift $ R.checkedConnect R.defaultConnectInfo
@@ -57,6 +66,8 @@ getProcessedResult j = do
     Left _ -> mzero
     Right x -> MaybeT $ ((pure $ (LB.fromStrict <$> x) >>=  decode) :: IO (Maybe Response))
   
+-- Construct a response for the case that the job is not yet finished
+-- processing
 buildProcessingResponse :: JobID -> MaybeT IO Response
 buildProcessingResponse j = do
   exists <- liftIO $ queueEntryExists j
@@ -68,6 +79,7 @@ buildProcessingResponse j = do
             , test_results = []}
      else mzero
 
+-- See if the given JobID exists in the database
 queueEntryExists :: JobID -> IO (Bool)
 queueEntryExists j = do
   qe <- runMaybeT $ getQueueEntry j
@@ -75,6 +87,7 @@ queueEntryExists j = do
     Nothing -> return False
     _ -> return True
 
+-- Check if a user is making too many submissions
 tooManyRequests :: Submission -> IO (Bool)
 tooManyRequests = moreThanRequests Config.maxRequestFrequency
 
@@ -85,6 +98,9 @@ moreThanRequests maxAllowed s = do
     Nothing -> return True
     Just i -> return $ i >= maxAllowed
 
+-- Keep track of user requests to limit submission rate for users
+-- Uses Redis keys which expire (automatically clear) after a set
+-- time interval, controlling the submission rate
 noteRequestMade :: Submission -> Integer -> IO ()
 noteRequestMade s expiration = do
   let user = username s
