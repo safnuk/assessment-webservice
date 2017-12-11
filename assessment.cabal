@@ -12,27 +12,29 @@ cabal-version: >= 1.10
 build-type:    Simple
 
 library
-  exposed-modules:     System.Hworker
-                     , Assessment.Config
-                     , Assessment.Data
-                     , Assessment.External
-                     , Assessment.Job
-                     , Assessment.Log
-                     , Assessment.Types
-  other-modules:       Data.Aeson.Helpers
+  exposed-modules:  System.Hworker
+                  , Assessment.Config
+                  , Assessment.Data
+                  , Assessment.External
+                  , Assessment.Job
+                  , Assessment.Log
+                  , Assessment.Types
+  other-modules:    Data.Aeson.Helpers
   ghc-options:    -Wall
-  build-depends:       base >= 4.7 && < 5
-                     , aeson
-                     , attoparsec
-                     , binary
-                     , bytestring
-                     , hedis >= 0.6.5
-                     , mtl
-                     , req
-                     , text
-                     , time >= 1.5
-                     , transformers
-                     , uuid >= 1.2.6
+  build-depends:    base >= 4.7 && < 5
+                  , aeson
+                  , attoparsec
+                  , binary
+                  , bytestring
+                  , hedis >= 0.6.5
+                  , mtl
+                  , req
+                  , system-filepath
+                  , text
+                  , time >= 1.5
+                  , transformers
+                  , turtle
+                  , uuid >= 1.2.6
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -59,9 +61,11 @@ executable          assessment
                   , mtl
                   , req
                   , scotty
+                  , system-filepath
                   , text
                   , time >= 1.5
                   , transformers
+                  , turtle
                   , uuid >= 1.2.6
                   , assessment
 
@@ -84,9 +88,11 @@ executable         worker
                   , hedis >= 0.6.5
                   , mtl
                   , req
+                  , system-filepath
                   , text
                   , time >= 1.5
                   , transformers
+                  , turtle
                   , uuid >= 1.2.6
                   , assessment
 

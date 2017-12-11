@@ -10,12 +10,17 @@ logPort :: Int
 testsPort :: Int
 maxRequestFrequency :: Integer
 requestCounterTimeout :: Integer
+javaClass :: String
+compileCmd :: String
+runCmd :: String
 
-logURL = http "localhost" /: "log" /: "assessment"
 logPort = 3001
-testsURL = http "localhost" /: "assignment" /: "tests"
 testsPort = 3001
+logURL = http "localhost" /: "log" /: "assessment"
+testsURL = http "localhost" /: "assignment" /: "tests"
 maxRequestFrequency = 2
 requestCounterTimeout = 60
 
-
+javaClass = "Test"
+compileCmd = "javac"
+runCmd = "java"

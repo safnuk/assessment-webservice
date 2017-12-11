@@ -4,6 +4,7 @@
 
 module Assessment.Job where 
 
+import qualified Assessment.Config as Config
 import Assessment.External
 import Assessment.Log
 import qualified Assessment.Types as Types
@@ -15,6 +16,7 @@ import Control.Monad.Trans.Maybe
 import Data.Aeson (
     FromJSON
   , decode
+  , encode
   , object
   , parseJSON
   , toJSON
@@ -25,8 +27,13 @@ import qualified Data.Aeson as A
 import qualified Data.Binary as DB 
 import Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Lazy as LB
+import Data.Text (pack, strip, unpack)
+import qualified Data.UUID as UUID
+import Data.UUID.V4 (nextRandom)
 import qualified Database.Redis as R
+import System.IO (writeFile)
 import System.Hworker
+import Turtle (ExitCode(ExitSuccess), fromString, mktree, cd, procStrict, procStrictWithErr)
 
 
 data State = State (MVar Int)
@@ -67,8 +74,16 @@ getQueueEntry (JobID j) = do
 processQueueEntry :: JobID -> Types.QueueEntry -> IO ()
 processQueueEntry (JobID j) (Types.QueueEntry submission assignment) = do
   let codeSample = Types.code submission
-  (msg, program) <- compileCode codeSample
-  results <- sequence $ map (runProgram program) $ Types.inputs assignment
+  uuid <- nextRandom
+  let buildDir = "/tmp/assessment/" ++ (UUID.toString uuid)
+  mktree $ fromString buildDir
+  cd $ fromString buildDir
+  let javaFile = Config.javaClass ++ ".java"
+  saveJavaFile buildDir javaFile codeSample
+  msg <- compileCode javaFile
+  results <- if msg == ""
+    then sequence $ map (runProgram Config.javaClass) $ Types.inputs assignment
+    else pure $ replicate (length $ Types.inputs assignment) Nothing
   let pairs = zip results $ Types.outputs assignment
   let testResults = map validateTest pairs
   let response = Types.Response {
@@ -85,24 +100,39 @@ processQueueEntry (JobID j) (Types.QueueEntry submission assignment) = do
     , username = Types.username submission
     , timestamp = "2017"
   }
-  putResponse response
+  putResponse (JobID j) response
   postLog logEntry
-  putStrLn $ show response
 
-compileCode :: String -> IO (String, String)
-compileCode = undefined
+compileCode :: String -> IO (String)
+compileCode javaFile = do
+  (_, _, msg) <- procStrictWithErr (pack Config.compileCmd) [pack javaFile] ""
+  return $ unpack msg
 
-runProgram :: String -> String -> IO (String)
-runProgram = undefined
+saveJavaFile :: String -> String -> String -> IO ()
+saveJavaFile buildDir javaFile codeSample = 
+  writeFile filename codeSample
+  where filename = buildDir ++ "/" ++ javaFile
 
-validateTest :: (Eq a) => (a, a) -> Types.TestResult
-validateTest (x, y) = 
+runProgram :: String -> String -> IO (Maybe String)
+runProgram x y = do
+  (err, msg) <- procStrict (pack Config.runCmd)  (map pack [x, y])  ""
+  if err == ExitSuccess
+    then return (Just $ unpack . strip $ msg)
+    else return Nothing
+
+validateTest :: (Eq a) => (Maybe a, a) -> Types.TestResult
+validateTest (Just x, y) = 
   if x == y
     then Types.Pass
     else Types.Fail
+validateTest _ = Types.Fail
 
-putResponse :: Types.Response -> IO ()
-putResponse = undefined
+putResponse :: JobID -> Types.Response -> IO ()
+putResponse (JobID j) response = do
+  conn <- R.checkedConnect R.defaultConnectInfo
+  _ <- R.runRedis conn $ do
+         R.hset "DONE" (LB.toStrict $ DB.encode j) (LB.toStrict $ encode response)
+  return ()
 
 instance Job State JobID where
   job (State mvar) j =

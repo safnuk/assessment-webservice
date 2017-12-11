@@ -4,8 +4,6 @@ module Main where
 
 import Control.Concurrent (forkIO)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad
-import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Aeson ((.=), object)
 import Network.HTTP.Types.Status as Status
